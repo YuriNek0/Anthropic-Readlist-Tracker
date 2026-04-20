@@ -1,0 +1,13 @@
+[project]
+name = "anthropic-readings-daemon"
+version = "0.1.0"
+description = "Daemon that automatically fetches, updates, and renders Anthropic readings to PDF"
+requires-python = ">=3.12"
+dependencies = [
+    "nbconvert[webpdf]>=7.17.1",
+    "python-slugify>=8.0.4",
+    "pyyaml>=6.0.3",
+    "schedule>=1.2.0",
+    "msgraph-sdk>=1.0.0",
+    "msal>=1.0.0",
+]

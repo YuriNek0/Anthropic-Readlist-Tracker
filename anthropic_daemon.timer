@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Anthropic Readings Daemon daily
+Requires=anthropic-daemon.service
+After=anthropic-daemon.service
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=3600
+
+[Install]
+WantedBy=timers.target

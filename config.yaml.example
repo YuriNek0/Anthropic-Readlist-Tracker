@@ -1,0 +1,45 @@
+azure:
+  tenant_id: "your-tenant-id-here"
+  client_id: "your-client-id-here"
+  # Note: For user authentication, we use PublicClientApplication with device code flow.
+  # client_secret is NOT needed for device code flow.
+
+user:
+  email: "your-user-email-here"
+  # Optional: if provided along with password, uses username/password flow
+  # Otherwise, uses device code flow (recommended for daemons)
+  password: ""
+
+email:
+  sender: "your-email@company.com"
+  recipients:
+    - "recipient1@example.com"
+    - "recipient2@example.com"
+  subject_prefix: "[Anthropic Readings]"
+
+paths:
+  output_dir: "outputs"
+
+repos:
+  - name: "cookbooks"
+    url: "https://github.com/anthropics/claude-cookbooks.git"
+    local_path: "claude-cookbooks"
+    version_file: "cookbook-version.json"
+    discover_patterns:
+      - "*.ipynb"
+    manifest_file: "registry.yaml"
+
+  - name: "courses"
+    url: "https://github.com/anthropics/claude-courses.git"
+    local_path: "claude-courses"
+    version_file: "courses-version.json"
+    discover_patterns:
+      - "*.ipynb"
+      - "*.md"
+    manifest_file: null
+
+daemon:
+  log_level: "INFO"
+  random_delay_max_hours: 1
+
+is_production: false

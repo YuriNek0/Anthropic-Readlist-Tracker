@@ -1,0 +1,29 @@
+[Unit]
+Description=Anthropic Readings Daemon - Fetch, update, and render Anthropic readings to PDF
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/anthropic-readings/.venv/bin/python /opt/anthropic-readings/daemon.py --once --config /opt/anthropic-readings/config.yaml
+WorkingDirectory=/opt/anthropic-readings
+Environment=HOME=/root
+Environment=PATH=/opt/anthropic-readings/.venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONPATH=/opt/anthropic-readings
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/anthropic-readings/outputs
+ReadWritePaths=/opt/anthropic-readings/claude-cookbooks
+ReadWritePaths=/opt/anthropic-readings/claude-courses
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=anthropic-daemon
+
+[Install]
+WantedBy=multi-user.target

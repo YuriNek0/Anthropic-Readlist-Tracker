@@ -1,0 +1,91 @@
+from typing import Dict, List, Self
+import yaml
+import shutil
+import json
+import os
+import sys
+from pathlib import Path
+from datetime import datetime
+from slugify import slugify
+
+PWD = Path(__file__).parent
+
+
+class Post:
+    def __init__(self, path, title, date, **kwargs):
+        self.path = path
+        self.title = title
+        self.date = date
+
+    @classmethod
+    def map_from_parsed(cls, content: list) -> Dict[str, Self]:
+        return {obj["path"]: Post(**obj) for obj in content}
+
+    @classmethod
+    def to_json(cls, objs: List[Self]) -> str:
+        return json.dumps([
+            {"path": obj.path, "title": obj.title, "date": obj.date} for obj in objs
+        ])
+
+
+if __name__ == "__main__":
+    os.chdir(PWD)
+    output_dir = PWD / "outputs"
+    if output_dir.exists():
+        shutil.rmtree(str(output_dir))
+    cookbook_path = PWD / "claude-cookbooks"
+    if cookbook_path.is_dir():
+        os.system("cd claude-cookbooks; git pull")
+    elif cookbook_path.exists():
+        print("Unexpected Error - ./claude-cookbooks is not a directory.")
+        sys.exit(1)
+    else:
+        os.system("git clone https://github.com/anthropics/claude-cookbooks.git")
+
+    cookbook_ver_store = PWD / "cookbook-version.json"
+    prev_cookbook_map = {}
+    if cookbook_ver_store.exists():
+        with open(str(cookbook_ver_store), "r") as f:
+            prev_cookbook_map = Post.map_from_parsed(json.load(f))
+
+    # Parse yaml
+    cookbook_yaml_path = cookbook_path / "registry.yaml"
+    if not cookbook_yaml_path.is_file():
+        print("Unexpected Error - registry.yaml not found.")
+        sys.exit(1)
+
+    with open(str(cookbook_yaml_path), "r") as f:
+        registry = yaml.load(f, Loader=yaml.SafeLoader)
+
+    # Build Maps
+    cookbook_map = Post.map_from_parsed(registry)
+    to_render = []
+    for post in cookbook_map.values():
+        if post.path not in prev_cookbook_map:
+            to_render.append((
+                post.path,
+                str(PWD / "outputs" / post.date),
+                f"{slugify(post.title)}.pdf",
+            ))
+            continue
+        prev_date = datetime.strptime(prev_cookbook_map[post.path].date, "%Y-%m-%d")
+        curr_date = datetime.strptime(post.date, "%Y-%m-%d")
+        if curr_date > prev_date:
+            to_render.append((
+                post.path,
+                str(Path(str(PWD / "outputs") + post.path) / post.date),
+                f"{slugify(post.title)}.pdf",
+            ))
+
+    # Render Notebooks
+    [
+        os.system(
+            f"source {str(PWD / '.venv' / 'bin' / 'activate')};jupyter nbconvert --to=webpdf --allow-chromium-download --output={name} --output-dir={_dir} {str(PWD / 'claude-cookbooks')}/{path}"
+        )
+        for path, _dir, name in to_render
+    ]
+
+    # Save Posts
+    write_json = Post.to_json(list(cookbook_map.values()))
+    with open(str(cookbook_ver_store), "w") as w:
+        w.write(write_json)
