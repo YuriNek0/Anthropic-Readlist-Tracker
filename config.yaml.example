@@ -12,9 +12,21 @@ user:
 
 email:
   sender: "your-email@company.com"
+  # Optional display name used as the shared sender name in sent emails.
+  # Can also be provided inline: "Display Name <email@company.com>"
+  sender_name: ""
   recipients:
     - "recipient1@example.com"
     - "recipient2@example.com"
+  # Optional internal users who can access shared OneDrive links.
+  # Defaults to email.recipients if omitted.
+  # share_recipients:
+  #   - "reader1@example.com"
+  #   - "reader2@example.com"
+  # Optional recipient domain filter for share links.
+  # When enabled, only addresses ending with this domain get link access.
+  share_domain_filter_enabled: false
+  share_domain: "company.com"
   subject_prefix: "[Anthropic Readings]"
 
 paths:
@@ -41,5 +53,7 @@ repos:
 daemon:
   log_level: "INFO"
   random_delay_max_hours: 1
+  render_concurrency: 4
+  upload_concurrency: 4
 
 is_production: false

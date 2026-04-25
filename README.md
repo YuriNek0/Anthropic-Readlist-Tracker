@@ -1,110 +1,329 @@
-# Anthropic Readings Manager
+# Anthropic Readings Daemon
 
-An automated daemon that monitors Anthropic's public GitHub repositories for new or updated educational content (cookbooks and courses), renders them to PDF, and sends email notifications with the PDFs as attachments.
+Anthropic Readings Daemon is a Python service that watches Anthropic learning repositories, renders changed documents to PDF, uploads the outputs to Microsoft OneDrive AppFolder, and emails recipients links to the latest documents.
 
-## Features
+> Disclaimer: This project was initially assembled with AI assistance to deliver core functionality quickly, and has not yet been fully polished for broad public consumption.
 
-- **GitHub Monitoring**: Tracks `claude-cookbooks` and `claude-courses` repositories
-- **Change Detection**: Identifies new and updated documents using date comparison and content hashing
-- **PDF Rendering**: Converts Jupyter notebooks (`.ipynb`) and Markdown (`.md`) to styled PDFs
-- **Email Notifications**: Sends HTML emails with PDF attachments via Microsoft Graph API
-- **Systemd Integration**: Ships as a systemd service + timer for daily scheduled runs
-- **Course Organization**: Groups course materials into ZIP archives by folder
+It is designed to run as an unattended background job, with a safe one-shot mode for local testing and manual runs.
+
+## What it does
+
+- Keeps a local clone of configured GitHub repositories and updates them on each run.
+- Discovers documents from:
+  - `cookbooks`: from `registry.yaml` entries
+  - `courses`: from configurable file globs (for example `*.md`, `*.ipynb`)
+- Detects changes using both document date and file content hash (SHA-256, truncated).
+- Renders new/updated markdown and notebooks to PDF:
+  - Markdown (`.md`) via `pandoc` + `weasyprint`
+  - Jupyter Notebooks (`.ipynb`) via `jupyter nbconvert --to=webpdf`
+- Rewrites internal links before rendering so references to `.md`/`.ipynb` become `.pdf` links.
+- Uploads generated PDFs and per-repo version metadata files to OneDrive under `special/approot` (AppFolder).
+- Generates recipient-scoped sharing links for each uploaded PDF.
+- Sends a single update email with all new/updated links and render/upload errors.
+- Performs all upload/link/version operations with rollback behavior: if any stage fails, uploaded OneDrive items are removed.
+- Cleans up temporary output and cloned repository directories after each run.
+
+## Functional behavior that matters in practice
+
+- **No config fallback**: startup fails fast if config is missing or invalid.
+- **Date stability during a run**: output folders use the discovered document metadata date (not file mtime), preventing date drift on long runs.
+- **Course paths**:
+  - `AmazonBedrock` content is excluded.
+  - Folder structure is preserved in output/upload paths (except `Anthropic 1P` path segments are dropped in OneDrive PDFs).
+- **Cookbook naming**:
+  - PDF filenames come from manifest titles and are slugified.
+  - `00-foo.md` becomes `00-<slugified-title>.pdf`.
+- **Upload paths** are repo-scoped:
+  - PDFs: `<repo_name>/...`
+  - Version files: `<repo_name>/<version_file_name>`
+- **OneDrive cleanup semantics**:
+  - rollback deletes uploaded artifacts via permanent delete endpoint behavior where required.
+- **Error reporting**: if configured as production, failures are also summarized and sent as an error email.
+
+## Repository structure
+
+```text
+.
+├── src/
+│   └── anthropic_readings/
+│       ├── core/
+│       │   ├── link_rewrite.py
+│       │   └── output_paths.py
+│       ├── cli.py
+│       ├── config.py
+│       ├── discovery.py
+│       ├── orchestrator.py
+│       ├── rendering.py
+│       ├── graph.py
+│       ├── mailer.py
+│       ├── repository.py
+│       └── models.py
+├── daemon.py
+├── run_onedrive_test.py
+├── anthropic_daemon.service
+├── anthropic_daemon.timer
+├── config.yaml.example
+└── tests/
+```
 
 ## Prerequisites
 
 - Python 3.12+
-- [UV](https://github.com/astral-sh/uv) package manager
-- Pandoc + weasyprint (for Markdown-to-PDF)
-- Chromium (for notebook-to-PDF conversion via nbconvert)
-- Git
+- `uv`
+- `git`
+- `pandoc`
+- `weasyprint`
+- Chromium (for `nbconvert` webpdf)
+- Microsoft Entra / Azure AD app with Microsoft Graph access
+
+### Install system packages
+
+macOS:
+
+```bash
+brew install pandoc weasyprint
+```
+
+Debian / Ubuntu:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y pandoc weasyprint git
+```
+
+`nbconvert` will try to download Chromium if it is not available.
 
 ## Installation
 
+### 1) Clone
+
 ```bash
-# Clone the repository
 git clone <your-repo-url>
 cd claude-cookbooks-auto-update
+```
 
-# Create virtual environment
+### 2) Create a virtual environment and install the package
+
+```bash
 uv venv
 source .venv/bin/activate
 uv pip install -e .
 ```
 
-### System Dependencies
+The project entry point is:
 
-**macOS:**
 ```bash
-brew install pandoc weasyprint
+anthropic-readings-daemon --help
 ```
 
-**Linux (Debian/Ubuntu):**
+You can also run with Python directly:
+
 ```bash
-sudo apt-get install pandoc weasyprint
+python -m anthropic_readings --help
 ```
 
-Chromium will be downloaded automatically by nbconvert.
-
-## Configuration
+### 3) Provide configuration
 
 ```bash
 cp config.yaml.example config.yaml
 ```
 
-Edit `config.yaml` with your settings:
+Edit `config.yaml` to match your environment.
 
-| Section | Description |
-|---------|-------------|
-| `azure` | Azure AD tenant/client IDs for Microsoft Graph API |
-| `user` | Email for device code flow authentication |
-| `email` | Sender/recipient addresses |
-| `repos` | GitHub repositories to track |
-| `daemon` | Log level and random delay settings |
+## Configuration
 
-## Usage
+### Required sections
 
-### One-time Mode (testing)
+- `azure.tenant_id`
+- `azure.client_id`
+- `azure.client_secret`
+- `user.email`
+- `email.sender`
+- `email.recipients` (non-empty list)
+- `repos` (at least one repo config)
 
-```bash
-python daemon.py --once --config config.yaml
+### Required repo fields
+
+Each repo item requires:
+
+- `name`
+- `url`
+- `local_path`
+- `version_file`
+- `discover_patterns`
+
+Optional repo field:
+
+- `manifest_file` (used for cookbook manifest mode)
+
+### Example configuration
+
+```yaml
+azure:
+  tenant_id: "your-tenant-id"
+  client_id: "your-client-id"
+  client_secret: "your-client-secret"
+
+user:
+  email: "operator@company.com"
+  # Leave empty to use device-code flow (recommended for unattended jobs)
+  password: ""
+
+email:
+  sender: "operator@company.com"
+  sender_name: "Anthropic Readings"
+  recipients:
+    - "recipient1@company.com"
+    - "recipient2@company.com"
+  # Optional: explicit users for sharing links
+  # share_recipients:
+  #   - "reader1@company.com"
+  share_domain_filter_enabled: false
+  share_domain: "company.com"
+  subject_prefix: "[Anthropic Readings]"
+
+paths:
+  output_dir: "outputs"
+
+repos:
+  - name: "cookbooks"
+    url: "https://github.com/anthropics/claude-cookbooks.git"
+    local_path: "claude-cookbooks"
+    version_file: "cookbook-version.json"
+    discover_patterns:
+      - "*.ipynb"
+    manifest_file: "registry.yaml"
+
+  - name: "courses"
+    url: "https://github.com/anthropics/courses.git"
+    local_path: "claude-courses"
+    version_file: "courses-version.json"
+    discover_patterns:
+      - "*.ipynb"
+      - "*.md"
+    manifest_file: null
+
+daemon:
+  log_level: "INFO"
+  random_delay_max_hours: 1
+  render_concurrency: 4
+  upload_concurrency: 4
+
+is_production: false
 ```
 
-### Check Configuration
+### Authentication
+
+- **Device code flow** (recommended): set `user.password: ""`.
+- **Username/password flow**: provide both `user.email` and `user.password`.
+
+### Graph API scopes
+
+The daemon asks for graph scopes similar to:
+
+- `User.Read`
+- `Mail.Send`
+- `Files.ReadWrite` (AppFolder workflow expects AppFolder access)
+
+## CLI usage
+
+Validate config:
 
 ```bash
-python daemon.py --check --config config.yaml
+python -m anthropic_readings --check --config config.yaml
 ```
 
-### Systemd Service (production)
+Run once (recommended for testing):
 
 ```bash
-# Copy service files
+python -m anthropic_readings --once --config config.yaml
+```
+
+Run continuously:
+
+```bash
+python -m anthropic_readings --config config.yaml
+```
+
+If `--config` is omitted, defaults are checked in this order:
+
+1. `./config.yaml`
+2. `src/anthropic_readings/config.yaml`
+3. `<project-root>/config.yaml`
+
+If `schedule` is not installed, long-lived mode automatically falls back to `--once`.
+
+## Production deployment (systemd)
+
+The included unit files are wired for installation at `/opt/anthropic-readings/`.
+
+```bash
 sudo cp anthropic_daemon.service /etc/systemd/system/
 sudo cp anthropic_daemon.timer /etc/systemd/system/
-
-# Enable and start
-sudo systemctl daemon-reload
 sudo systemctl enable anthropic_daemon.timer
 sudo systemctl start anthropic_daemon.timer
 ```
 
-## Project Structure
+Service checks:
 
-```
-.
-├── daemon.py                 # Main daemon implementation
-├── test_daemon.py           # Unit tests
-├── pyproject.toml            # Python project config
-├── config.yaml.example       # Example configuration template
-├── anthropic_daemon.service  # Systemd oneshot service
-├── anthropic_daemon.timer    # Systemd timer (daily run)
-└── README.md                 # This file
+```bash
+systemctl status anthropic_daemon.timer
+systemctl status anthropic_daemon.service
+journalctl -u anthropic-daemon -n 200
 ```
 
-## How It Works
+## Run lifecycle (what happens in one run)
 
-1. **Sync**: Clones/pulls from configured GitHub repositories
-2. **Detect**: Compares documents against previously tracked versions
-3. **Render**: Converts changed notebooks and markdown to PDF
-4. **Notify**: Sends email with PDFs attached (individual docs or zipped by course folder)
+1. Load and validate config
+2. Clone or pull each configured repo
+3. Discover current documents
+4. Compare against previous version metadata in OneDrive
+5. Render only changed documents
+6. Upload PDFs and create sharing links
+7. Send one consolidated email update
+8. Upload updated version metadata files
+9. Remove temporary local artifacts on completion
+
+## Notes for troubleshooting
+
+- If startup fails with `CONFIG ERROR`, fix the reported field and rerun `--check`.
+- If PDF output fails, verify `pandoc`, `weasyprint`, and notebook rendering dependencies.
+- If emails are skipped, verify `Mail.Send` consent in Azure and that `email.sender` / `email.recipients` are valid.
+- If device code auth is expected, keep `user.password` empty.
+- Local output and cloned repo directories are deleted after the run; if a repo disappears unexpectedly, it will be re-cloned next run.
+
+## Testing
+
+Targeted unit suite:
+
+```bash
+python -m pytest tests/test_daemon.py
+```
+
+Run all tests:
+
+```bash
+python -m pytest tests
+```
+
+OneDrive-focused tests (mocked by default):
+
+```bash
+python run_onedrive_test.py
+```
+
+Live OneDrive test:
+
+```bash
+python run_onedrive_test.py --live --credentials /path/to/onedrive-test-credentials.yaml
+```
+
+Keep remote test artifacts:
+
+```bash
+python run_onedrive_test.py --live --credentials /path/to/onedrive-test-credentials.yaml --keep-remote
+```
+
+## Why use this daemon
+
+Use this project when you need a reliable pipeline that continuously keeps OneDrive links updated as Anthropic content evolves, while keeping link references valid inside rendered PDFs and preserving repo-aware upload locations.

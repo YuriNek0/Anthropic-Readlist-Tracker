@@ -112,7 +112,7 @@ wheels = [
 [[package]]
 name = "anthropic-readings-daemon"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "msal" },
     { name = "msgraph-sdk" },
