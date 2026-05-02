@@ -116,6 +116,69 @@ The project entry point is:
 anthropic-readings-daemon --help
 ```
 
+## Nix flake
+
+This repository now includes a `flake.nix` that exposes:
+
+- `packages.<system>.default`: the packaged `anthropic-readings-daemon`
+- `homeManagerModules.default`: a Home Manager module for a `systemd --user` service
+- `nixosModules.default`: a NixOS module that also defines a `systemd --user` service
+
+The packaged daemon is wrapped with the runtime tools it needs at execution time:
+
+- `git`
+- `pandoc`
+- `weasyprint`
+- `chromium` via `CHROMIUM_PATH`
+
+### Home Manager example
+
+```nix
+{
+  inputs.anthropic-readings.url = "path:/path/to/claude-cookbooks-auto-update";
+
+  outputs = { self, nixpkgs, home-manager, anthropic-readings, ... }: {
+    homeConfigurations.alice = home-manager.lib.homeManagerConfiguration {
+      pkgs = import nixpkgs { system = "x86_64-linux"; };
+      modules = [
+        anthropic-readings.homeManagerModules.default
+        {
+          services.anthropic-readings = {
+            enable = true;
+            configFile = "/home/alice/.config/anthropic-readings/config.yaml";
+          };
+        }
+      ];
+    };
+  };
+}
+```
+
+### NixOS example
+
+```nix
+{
+  inputs.anthropic-readings.url = "path:/path/to/claude-cookbooks-auto-update";
+
+  outputs = { self, nixpkgs, anthropic-readings, ... }: {
+    nixosConfigurations.host = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        anthropic-readings.nixosModules.default
+        {
+          services.anthropic-readings = {
+            enable = true;
+            configFile = "/home/alice/.config/anthropic-readings/config.yaml";
+          };
+        }
+      ];
+    };
+  };
+}
+```
+
+The user service runs continuously with `Restart=always` and `RestartSec=4h` by default, so if it exits, systemd waits four hours before attempting the next restart. You can override that with `services.anthropic-readings.restartDelay`.
+
 You can also run with Python directly:
 
 ```bash

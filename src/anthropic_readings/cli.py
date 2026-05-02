@@ -20,6 +20,17 @@ def _resolve_config_path(cli_path: str | None):
     return None
 
 
+def _run_once(config: Config, logger) -> None:
+    import asyncio
+
+    asyncio.run(run_daemon(config, logger))
+
+
+def _schedule_daily_run(config: Config, logger, schedule_module) -> None:
+    # Keep the scheduler setup explicit so the daemon runs once every 24 hours.
+    schedule_module.every().day.do(lambda: _run_once(config, logger))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Anthropic Readings Daemon")
     parser.add_argument(
@@ -64,10 +75,8 @@ def main() -> None:
         logger.info(f"Output dir: {config.output_dir}")
         return
 
-    import asyncio
-
     if args.once:
-        asyncio.run(run_daemon(config, logger))
+        _run_once(config, logger)
         return
 
     try:
@@ -75,11 +84,11 @@ def main() -> None:
     except ImportError:
         logger.error("schedule library not installed. Run: uv pip install schedule")
         logger.info("Falling back to --once mode")
-        asyncio.run(run_daemon(config, logger))
+        _run_once(config, logger)
         return
 
     logger.info("Starting daemon with daily schedule")
-    schedule.repeat(lambda: asyncio.run(run_daemon(config, logger)))
+    _schedule_daily_run(config, logger, schedule)
 
     try:
         import time
