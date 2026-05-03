@@ -112,7 +112,7 @@
               --prefix PATH : "${lib.makeBinPath [
                 pkgs.git
                 pkgs.pandoc
-                pkgs.weasyprint
+                pythonPackages.weasyprint
               ]}" \
               --set CHROMIUM_PATH "${lib.getExe pkgs.chromium}"
           '';
