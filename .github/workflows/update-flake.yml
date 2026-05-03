@@ -1,0 +1,21 @@
+name: Update flake
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: write
+
+jobs:
+  update-flake:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Update flake and build
+        uses: YuriNek0/nix-flake-update-action@v1
+        with:
+          packages: "default"
