@@ -81,8 +81,7 @@
       let
         pkgs = import nixpkgs { inherit system; };
         lib = pkgs.lib;
-        python = pkgs.python312;
-        pythonPackages = python.pkgs;
+        pythonPackages = pkgs.python3Packages;
 
         anthropic-readings-daemon = pythonPackages.buildPythonApplication {
           pname = "anthropic-readings-daemon";
