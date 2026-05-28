@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "anthropic-readings-daemon"
 version = "0.1.0"
 description = "Daemon that automatically fetches, updates, and renders Anthropic readings to PDF"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     "nbconvert[webpdf]>=7.17.1",
     "python-slugify>=8.0.4",
@@ -21,3 +21,8 @@ anthropic-readings-daemon = "anthropic_readings.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]

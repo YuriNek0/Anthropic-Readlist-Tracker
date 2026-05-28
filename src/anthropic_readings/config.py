@@ -61,6 +61,7 @@ class DaemonConfig:
     log_level: str = "INFO"
     random_delay_max_hours: int = 1
     render_concurrency: int = 1
+    render_timeout_seconds: int = 600
     upload_concurrency: int = 1
 
 
@@ -187,6 +188,12 @@ class Config:
             normalized_daemon_data["render_concurrency"] = _require_int_at_least(
                 normalized_daemon_data["render_concurrency"],
                 "daemon.render_concurrency",
+                minimum=1,
+            )
+        if "render_timeout_seconds" in normalized_daemon_data:
+            normalized_daemon_data["render_timeout_seconds"] = _require_int_at_least(
+                normalized_daemon_data["render_timeout_seconds"],
+                "daemon.render_timeout_seconds",
                 minimum=1,
             )
         if "upload_concurrency" in normalized_daemon_data:

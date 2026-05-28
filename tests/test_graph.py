@@ -240,6 +240,7 @@ class TestConfigShareRecipients(unittest.TestCase):
             ],
             "daemon": {
                 "render_concurrency": 3,
+                "render_timeout_seconds": 900,
                 "upload_concurrency": 5,
             },
         }
@@ -251,6 +252,7 @@ class TestConfigShareRecipients(unittest.TestCase):
             Path(path).unlink(missing_ok=True)
 
         self.assertEqual(config.daemon.render_concurrency, 3)
+        self.assertEqual(config.daemon.render_timeout_seconds, 900)
         self.assertEqual(config.daemon.upload_concurrency, 5)
 
     def test_config_rejects_invalid_daemon_concurrency(self):
@@ -277,6 +279,39 @@ class TestConfigShareRecipients(unittest.TestCase):
             "daemon": {
                 "render_concurrency": 0,
                 "upload_concurrency": 1,
+            },
+        }
+
+        path = self._make_config_file(payload)
+        try:
+            with self.assertRaises(ValueError):
+                Config.from_yaml(Path(path))
+        finally:
+            Path(path).unlink(missing_ok=True)
+
+    def test_config_rejects_invalid_render_timeout(self):
+        payload = {
+            "azure": {
+                "tenant_id": "tid",
+                "client_id": "cid",
+                "client_secret": "secret",
+            },
+            "user": {"email": "user@example.com", "password": ""},
+            "email": {
+                "sender": "noreply@example.com",
+                "recipients": ["receiver@example.com"],
+            },
+            "repos": [
+                {
+                    "name": "courses",
+                    "url": "https://example.local/fake.git",
+                    "local_path": "./path",
+                    "version_file": "courses-version.json",
+                    "discover_patterns": ["*.md"],
+                }
+            ],
+            "daemon": {
+                "render_timeout_seconds": 0,
             },
         }
 

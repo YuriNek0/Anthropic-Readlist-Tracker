@@ -52,6 +52,7 @@ class TestConfigFromDefaults(unittest.TestCase):
     def test_default_daemon_concurrency_config(self):
         config = daemon.Config.from_defaults()
         self.assertEqual(config.daemon.render_concurrency, 1)
+        self.assertEqual(config.daemon.render_timeout_seconds, 600)
         self.assertEqual(config.daemon.upload_concurrency, 1)
 
 
@@ -372,6 +373,46 @@ class TestRewriteNotebookLinks(unittest.TestCase):
             notebook["cells"][0]["source"][0],
             "See [Refs](references.pdf) for details.\n",
         )
+
+
+class TestRenderDocumentToPdf(unittest.TestCase):
+    def test_failed_renderer_with_short_stderr_reports_original_error(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            repo_path = temp_path / "repo"
+            output_dir = temp_path / "outputs"
+            repo_path.mkdir()
+            (repo_path / "notes.md").write_text("# Notes\n", encoding="utf-8")
+
+            doc = daemon.TrackedDocument(
+                path="notes.md",
+                title="Notes",
+                date="2024-01-15",
+            )
+            failed_result = MagicMock(
+                returncode=1,
+                stderr="renderer failed\n",
+                stdout="",
+            )
+
+            with patch(
+                "anthropic_readings.rendering.subprocess.run",
+                return_value=failed_result,
+            ) as mock_run:
+                rendered = daemon.render_document_to_pdf(
+                    doc,
+                    repo_path,
+                    output_dir,
+                    MagicMock(),
+                    repo_name="courses",
+                    render_timeout_seconds=123,
+                )
+
+            self.assertEqual(rendered.error, "renderer failed")
+            call_args = mock_run.call_args
+            if call_args is None:
+                self.fail("subprocess.run was not called")
+            self.assertEqual(call_args.kwargs["timeout"], 123)
 
 
 class TestRunDaemonFlow(unittest.IsolatedAsyncioTestCase):

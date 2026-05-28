@@ -17,9 +17,23 @@ from .core.output_paths import (
 )
 from .models import RenderedDocument, TrackedDocument
 
+RENDER_TIMEOUT_SECONDS = 600
+
 
 def slugify_title(title: str) -> str:
     return _slugify_title(title)
+
+
+def _format_render_failure(result: subprocess.CompletedProcess[str]) -> str:
+    stderr_lines = [line.strip() for line in result.stderr.splitlines() if line.strip()]
+    if stderr_lines:
+        return stderr_lines[-1]
+
+    stdout_lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    if stdout_lines:
+        return stdout_lines[-1]
+
+    return f"Render command failed with exit code {result.returncode}"
 
 
 def build_render_output_path(
@@ -100,6 +114,7 @@ def render_document_to_pdf(
     logger: logging.Logger,
     repo_name: str = "",
     output_relpath_by_doc: dict[str, str] | None = None,
+    render_timeout_seconds: int = RENDER_TIMEOUT_SECONDS,
 ) -> RenderedDocument:
     source_path = repo_path / doc.path
     if not source_path.is_file():
@@ -152,13 +167,15 @@ def render_document_to_pdf(
             cmd,
             capture_output=True,
             text=True,
-            timeout=300,
+            timeout=render_timeout_seconds,
         )
 
         if result.returncode != 0:
-            error_msg = (
-                result.stderr.split("\n")[-3] if result.stderr else "Unknown error"
-            )
+            error_msg = _format_render_failure(result)
+            if result.stderr:
+                logger.error("Render stderr for %s:\n%s", doc.path, result.stderr)
+            if result.stdout:
+                logger.error("Render stdout for %s:\n%s", doc.path, result.stdout)
             logger.error(f"PDF rendering failed for {doc.path}: {error_msg}")
             return RenderedDocument(doc=doc, repo_name=repo_name, error=error_msg)
 
@@ -172,7 +189,7 @@ def render_document_to_pdf(
         return RenderedDocument(doc=doc, repo_name=repo_name, pdf_path=pdf_path)
 
     except subprocess.TimeoutExpired:
-        error_msg = "PDF rendering timed out"
+        error_msg = f"PDF rendering timed out after {render_timeout_seconds} seconds"
         logger.error(f"{doc.path}: {error_msg}")
         return RenderedDocument(doc=doc, repo_name=repo_name, error=error_msg)
     except Exception as e:

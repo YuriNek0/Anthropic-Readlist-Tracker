@@ -132,6 +132,7 @@ async def _render_documents_concurrently(
     logger: logging.Logger,
     repo_name: str,
     max_concurrency: int,
+    render_timeout_seconds: int,
     output_relpath_by_doc: dict[str, str] | None = None,
     on_rendered=None,
 ) -> list[RenderedDocument]:
@@ -147,6 +148,7 @@ async def _render_documents_concurrently(
                 logger,
                 repo_name,
                 output_relpath_by_doc,
+                render_timeout_seconds,
             )
 
         if on_rendered is not None:
@@ -214,6 +216,7 @@ async def process_repo(
         logger,
         repo_config.name,
         render_concurrency,
+        config.daemon.render_timeout_seconds,
         output_relpath_by_doc=output_relpath_by_doc,
         on_rendered=on_rendered,
     )
