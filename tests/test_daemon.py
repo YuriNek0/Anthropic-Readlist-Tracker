@@ -17,6 +17,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 import anthropic_readings.daemon as daemon
 import anthropic_readings.mailer as _mailer
 import anthropic_readings.orchestrator as _orchestrator
+import anthropic_readings.rendering as _rendering
 from anthropic_readings.core.link_rewrite import rewrite_markdown_links
 from anthropic_readings.core.link_rewrite import rewrite_notebook_markdown_cells
 
@@ -376,6 +377,18 @@ class TestRewriteNotebookLinks(unittest.TestCase):
 
 
 class TestRenderDocumentToPdf(unittest.TestCase):
+    def test_pdf_stylesheet_overrides_notebook_overflow_layout(self):
+        stylesheet = _rendering.PDF_RENDER_STYLESHEET
+
+        self.assertIn(".jp-InputArea", stylesheet)
+        self.assertIn(".jp-OutputArea-child", stylesheet)
+        self.assertIn("display: block !important", stylesheet)
+        self.assertIn("overflow: visible !important", stylesheet)
+        self.assertIn("white-space: pre-wrap !important", stylesheet)
+        self.assertIn("word-break: break-all !important", stylesheet)
+        self.assertIn(".jp-InputPrompt", stylesheet)
+        self.assertIn("display: none !important", stylesheet)
+
     def test_failed_renderer_with_short_stderr_reports_original_error(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)

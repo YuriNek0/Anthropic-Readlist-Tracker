@@ -26,56 +26,122 @@ PDF_RENDER_STYLESHEET = """
 *,
 *::before,
 *::after {
-  box-sizing: border-box;
+  box-sizing: border-box !important;
 }
 
 html,
 body {
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  width: auto !important;
+  overflow: visible !important;
+  overflow-wrap: anywhere !important;
+  hyphens: auto;
+}
+
+body {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+body > div,
+main,
+article,
+section,
+.container,
+.jp-Notebook,
+.jp-NotebookPanel,
+.jp-Cell,
+.jp-CodeCell,
+.jp-MarkdownCell,
+.jp-Cell-inputWrapper,
+.jp-Cell-outputWrapper,
+.jp-InputArea-editor,
+.jp-OutputArea-output,
+.jp-RenderedHTMLCommon,
+.jp-RenderedText,
+.highlight,
+.cm-editor,
+.cm-scroller,
+.cm-content,
+.cm-line {
+  max-width: 100% !important;
+  min-width: 0 !important;
+  width: auto !important;
+  overflow: visible !important;
+}
+
+.jp-InputArea,
+.jp-OutputArea,
+.jp-OutputArea-child {
+  display: block !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  width: auto !important;
+  overflow: visible !important;
+  table-layout: auto !important;
+}
+
+.jp-InputPrompt,
+.jp-OutputPrompt,
+.jp-InputArea-prompt,
+.jp-OutputArea-prompt {
+  display: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
 }
 
 img,
 svg,
 canvas,
 video {
-  max-width: 100%;
-  height: auto;
+  max-width: 100% !important;
+  height: auto !important;
 }
 
 table {
-  max-width: 100%;
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
+  max-width: 100% !important;
+  width: 100% !important;
+  border-collapse: collapse !important;
+  table-layout: fixed !important;
 }
 
 th,
 td {
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  overflow-wrap: anywhere !important;
+  word-break: break-all !important;
 }
 
+p,
+li,
+a,
 pre,
 code,
 kbd,
 samp {
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  overflow-wrap: anywhere !important;
 }
 
-pre {
-  max-width: 100%;
-  white-space: pre-wrap;
+pre,
+.highlight pre,
+.jp-OutputArea-output pre,
+.jp-RenderedText pre,
+.cm-editor.cm-s-jupyter .highlight pre {
+  max-width: 100% !important;
+  white-space: pre-wrap !important;
+  overflow: visible !important;
+  word-break: break-all !important;
 }
 
 .jp-RenderedText,
 .jp-OutputArea-output,
 .output_text,
 .output_stream {
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
+  overflow-wrap: anywhere !important;
+  white-space: pre-wrap !important;
 }
 """.strip()
 
