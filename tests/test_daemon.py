@@ -412,6 +412,9 @@ class TestRenderDocumentToPdf(unittest.TestCase):
             call_args = mock_run.call_args
             if call_args is None:
                 self.fail("subprocess.run was not called")
+            cmd = call_args.args[0]
+            css_arg = next(arg for arg in cmd if arg.startswith("--css="))
+            self.assertEqual(Path(css_arg.split("=", 1)[1]).name, "pdf-render.css")
             self.assertEqual(call_args.kwargs["timeout"], 123)
 
     def test_notebook_renderer_uses_html_then_weasyprint(self):
@@ -440,7 +443,7 @@ class TestRenderDocumentToPdf(unittest.TestCase):
                     )
                     html_path.write_text("<html><body>lesson</body></html>", encoding="utf-8")
                 elif cmd[0] == "weasyprint":
-                    Path(cmd[2]).write_text("pdf", encoding="utf-8")
+                    Path(cmd[-1]).write_text("pdf", encoding="utf-8")
                 return MagicMock(returncode=0, stderr="", stdout="")
 
             with patch(
@@ -463,7 +466,8 @@ class TestRenderDocumentToPdf(unittest.TestCase):
             pdf_cmd = mock_run.call_args_list[1].args[0]
             self.assertEqual(html_cmd[:4], ["jupyter", "nbconvert", "--to=html", "--embed-images"])
             self.assertNotIn("--to=webpdf", html_cmd)
-            self.assertEqual(pdf_cmd[0], "weasyprint")
+            self.assertEqual(pdf_cmd[:2], ["weasyprint", "--stylesheet"])
+            self.assertEqual(Path(pdf_cmd[2]).name, "pdf-render.css")
 
 
 class TestRunDaemonFlow(unittest.IsolatedAsyncioTestCase):

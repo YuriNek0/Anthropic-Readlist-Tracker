@@ -18,6 +18,67 @@ from .models import RenderedDocument, TrackedDocument
 
 RENDER_TIMEOUT_SECONDS = 600
 
+PDF_RENDER_STYLESHEET = """
+@page {
+  margin: 0.75in;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+img,
+svg,
+canvas,
+video {
+  max-width: 100%;
+  height: auto;
+}
+
+table {
+  max-width: 100%;
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+th,
+td {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+pre,
+code,
+kbd,
+samp {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+pre {
+  max-width: 100%;
+  white-space: pre-wrap;
+}
+
+.jp-RenderedText,
+.jp-OutputArea-output,
+.output_text,
+.output_stream {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+""".strip()
+
 
 def slugify_title(title: str) -> str:
     return _slugify_title(title)
@@ -56,6 +117,12 @@ def _format_render_failure(result: subprocess.CompletedProcess[str]) -> str:
         return stdout_lines[-1]
 
     return f"Render command failed with exit code {result.returncode}"
+
+
+def _write_pdf_stylesheet(temp_dir: Path) -> Path:
+    stylesheet_path = temp_dir / "pdf-render.css"
+    stylesheet_path.write_text(PDF_RENDER_STYLESHEET, encoding="utf-8")
+    return stylesheet_path
 
 
 def build_render_output_path(
@@ -150,6 +217,7 @@ def render_document_to_pdf(
     try:
         temp_dir = Path(tempfile.mkdtemp(prefix="anthropic-render-"))
         temp_source = temp_dir / source_path.name
+        stylesheet_path = _write_pdf_stylesheet(temp_dir)
         shutil.copy2(source_path, temp_source)
 
         if source_path.suffix == ".ipynb":
@@ -170,6 +238,7 @@ def render_document_to_pdf(
                 "-o",
                 str(pdf_path),
                 "--pdf-engine=weasyprint",
+                f"--css={stylesheet_path}",
             ]
             logger.info(f"Rendering {source_path} to PDF via pandoc")
 
@@ -197,6 +266,8 @@ def render_document_to_pdf(
             if result.returncode == 0:
                 pdf_cmd = [
                     "weasyprint",
+                    "--stylesheet",
+                    str(stylesheet_path),
                     str(html_path),
                     str(pdf_path),
                 ]
