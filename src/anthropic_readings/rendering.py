@@ -153,7 +153,7 @@ def render_document_to_pdf(
                 "jupyter",
                 "nbconvert",
                 "--to=webpdf",
-                "--allow-chromium-download",
+                "--WebPDFExporter.allow_chromium_download=False",
                 f"--output={final_name}",
                 f"--output-dir={folder_dir}",
                 str(temp_source),

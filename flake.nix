@@ -117,6 +117,7 @@
                 pythonPackages.weasyprint
               ]}" \
               --prefix PYTHONPATH : "${pythonPackages.makePythonPath pythonDependencies}" \
+              --set PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD "1" \
               --set PLAYWRIGHT_BROWSERS_PATH "${pkgs.playwright-driver.browsers}" \
               --set CHROMIUM_PATH "${lib.getExe pkgs.chromium}"
           '';
