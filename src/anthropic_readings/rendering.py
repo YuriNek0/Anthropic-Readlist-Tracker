@@ -4,7 +4,6 @@ import json
 import logging
 import shutil
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
@@ -151,8 +150,6 @@ def render_document_to_pdf(
         else:
             final_name = Path(name).name
             cmd = [
-                sys.executable,
-                "-m",
                 "jupyter",
                 "nbconvert",
                 "--to=webpdf",

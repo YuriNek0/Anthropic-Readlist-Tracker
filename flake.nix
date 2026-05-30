@@ -82,6 +82,17 @@
         pkgs = import nixpkgs { inherit system; };
         lib = pkgs.lib;
         pythonPackages = pkgs.python3Packages;
+        pythonDependencies = with pythonPackages; [
+          azure-core
+          jupyter
+          msal
+          msgraph-sdk
+          nbconvert
+          playwright
+          python-slugify
+          pyyaml
+          schedule
+        ];
 
         anthropic-readings-daemon = pythonPackages.buildPythonApplication {
           pname = "anthropic-readings-daemon";
@@ -94,15 +105,7 @@
             wheel
           ];
 
-          dependencies = with pythonPackages; [
-            azure-core
-            msal
-            msgraph-sdk
-            nbconvert
-            python-slugify
-            pyyaml
-            schedule
-          ];
+          dependencies = pythonDependencies;
 
           nativeBuildInputs = [ pkgs.makeWrapper ];
 
@@ -113,10 +116,17 @@
                 pkgs.pandoc
                 pythonPackages.weasyprint
               ]}" \
+              --prefix PYTHONPATH : "${pythonPackages.makePythonPath pythonDependencies}" \
+              --set PLAYWRIGHT_BROWSERS_PATH "${pkgs.playwright-driver.browsers}" \
               --set CHROMIUM_PATH "${lib.getExe pkgs.chromium}"
           '';
 
-          pythonImportsCheck = [ "anthropic_readings" ];
+          pythonImportsCheck = [
+            "anthropic_readings"
+            "jupyter"
+            "nbconvert"
+            "playwright"
+          ];
 
           meta = with lib; {
             description = "Daemon that fetches, renders, uploads, and emails Anthropic readings";
