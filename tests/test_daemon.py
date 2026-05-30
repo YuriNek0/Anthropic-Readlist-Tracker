@@ -414,6 +414,57 @@ class TestRenderDocumentToPdf(unittest.TestCase):
                 self.fail("subprocess.run was not called")
             self.assertEqual(call_args.kwargs["timeout"], 123)
 
+    def test_notebook_renderer_uses_html_then_weasyprint(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            repo_path = temp_path / "repo"
+            output_dir = temp_path / "outputs"
+            repo_path.mkdir()
+            (repo_path / "lesson.ipynb").write_text(
+                '{"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}',
+                encoding="utf-8",
+            )
+
+            doc = daemon.TrackedDocument(
+                path="lesson.ipynb",
+                title="Lesson",
+                date="2024-01-15",
+            )
+
+            def fake_run(cmd, **kwargs):
+                if cmd[0] == "jupyter":
+                    output_dir_arg = next(arg for arg in cmd if arg.startswith("--output-dir="))
+                    output_arg = next(arg for arg in cmd if arg.startswith("--output="))
+                    html_path = Path(output_dir_arg.split("=", 1)[1]) / (
+                        output_arg.split("=", 1)[1] + ".html"
+                    )
+                    html_path.write_text("<html><body>lesson</body></html>", encoding="utf-8")
+                elif cmd[0] == "weasyprint":
+                    Path(cmd[2]).write_text("pdf", encoding="utf-8")
+                return MagicMock(returncode=0, stderr="", stdout="")
+
+            with patch(
+                "anthropic_readings.rendering.subprocess.run",
+                side_effect=fake_run,
+            ) as mock_run:
+                rendered = daemon.render_document_to_pdf(
+                    doc,
+                    repo_path,
+                    output_dir,
+                    MagicMock(),
+                    repo_name="courses",
+                    render_timeout_seconds=123,
+                )
+
+            self.assertIsNone(rendered.error)
+            self.assertIsNotNone(rendered.pdf_path)
+            self.assertEqual(mock_run.call_count, 2)
+            html_cmd = mock_run.call_args_list[0].args[0]
+            pdf_cmd = mock_run.call_args_list[1].args[0]
+            self.assertEqual(html_cmd[:4], ["jupyter", "nbconvert", "--to=html", "--embed-images"])
+            self.assertNotIn("--to=webpdf", html_cmd)
+            self.assertEqual(pdf_cmd[0], "weasyprint")
+
 
 class TestRunDaemonFlow(unittest.IsolatedAsyncioTestCase):
     async def test_run_daemon_processes_all_repos(self):

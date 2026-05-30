@@ -23,6 +23,29 @@ def slugify_title(title: str) -> str:
     return _slugify_title(title)
 
 
+def _run_render_command(
+    cmd: list[str],
+    render_timeout_seconds: int,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=render_timeout_seconds,
+    )
+
+
+def _log_render_output(
+    result: subprocess.CompletedProcess[str],
+    doc_path: str,
+    logger: logging.Logger,
+) -> None:
+    if result.stderr:
+        logger.error("Render stderr for %s:\n%s", doc_path, result.stderr)
+    if result.stdout:
+        logger.error("Render stdout for %s:\n%s", doc_path, result.stdout)
+
+
 def _format_render_failure(result: subprocess.CompletedProcess[str]) -> str:
     stderr_lines = [line.strip() for line in result.stderr.splitlines() if line.strip()]
     if stderr_lines:
@@ -138,46 +161,54 @@ def render_document_to_pdf(
             output_dir, date_str, repo_name, doc
         )
 
+        pdf_path = folder_dir / name
+
         if source_path.suffix == ".md":
             cmd = [
                 "pandoc",
                 str(temp_source),
                 "-o",
-                str(folder_dir / name),
+                str(pdf_path),
                 "--pdf-engine=weasyprint",
             ]
             logger.info(f"Rendering {source_path} to PDF via pandoc")
+
+            result = _run_render_command(cmd, render_timeout_seconds)
         else:
-            final_name = Path(name).name
-            cmd = [
+            html_stem = Path(name).stem
+            html_path = folder_dir / f"{html_stem}.html"
+            html_cmd = [
                 "jupyter",
                 "nbconvert",
-                "--to=webpdf",
-                "--WebPDFExporter.allow_chromium_download=False",
-                "--WebPDFExporter.disable_sandbox=True",
-                f"--output={final_name}",
+                "--to=html",
+                "--embed-images",
+                f"--output={html_stem}",
                 f"--output-dir={folder_dir}",
                 str(temp_source),
             ]
-            logger.info(f"Rendering {source_path} to PDF via nbconvert")
+            logger.info(f"Rendering {source_path} to HTML via nbconvert")
 
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=render_timeout_seconds,
-        )
+            result = _run_render_command(html_cmd, render_timeout_seconds)
+            if result.returncode == 0 and not html_path.is_file():
+                error_msg = "Notebook HTML file not created"
+                logger.error(error_msg)
+                return RenderedDocument(doc=doc, repo_name=repo_name, error=error_msg)
+
+            if result.returncode == 0:
+                pdf_cmd = [
+                    "weasyprint",
+                    str(html_path),
+                    str(pdf_path),
+                ]
+                logger.info(f"Rendering {source_path} HTML to PDF via weasyprint")
+                result = _run_render_command(pdf_cmd, render_timeout_seconds)
 
         if result.returncode != 0:
             error_msg = _format_render_failure(result)
-            if result.stderr:
-                logger.error("Render stderr for %s:\n%s", doc.path, result.stderr)
-            if result.stdout:
-                logger.error("Render stdout for %s:\n%s", doc.path, result.stdout)
+            _log_render_output(result, doc.path, logger)
             logger.error(f"PDF rendering failed for {doc.path}: {error_msg}")
             return RenderedDocument(doc=doc, repo_name=repo_name, error=error_msg)
 
-        pdf_path = folder_dir / name
         if not pdf_path.is_file():
             error_msg = "PDF file not created"
             logger.error(error_msg)

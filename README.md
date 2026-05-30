@@ -15,7 +15,7 @@ It is designed to run as an unattended background job, with a safe one-shot mode
 - Detects changes using both document date and file content hash (SHA-256, truncated).
 - Renders new/updated markdown and notebooks to PDF:
   - Markdown (`.md`) via `pandoc` + `weasyprint`
-  - Jupyter Notebooks (`.ipynb`) via `jupyter nbconvert --to=webpdf`
+  - Jupyter Notebooks (`.ipynb`) via `jupyter nbconvert --to=html` + `weasyprint`
 - Rewrites internal links before rendering so references to `.md`/`.ipynb` become `.pdf` links.
 - Uploads generated PDFs and per-repo version metadata files to OneDrive under `special/approot` (AppFolder).
 - Generates recipient-scoped sharing links for each uploaded PDF.
@@ -73,7 +73,6 @@ It is designed to run as an unattended background job, with a safe one-shot mode
 - `git`
 - `pandoc`
 - `weasyprint`
-- Chromium (for `nbconvert` webpdf)
 - Microsoft Entra / Azure AD app with Microsoft Graph access
 
 ### Install system packages
@@ -91,7 +90,7 @@ sudo apt-get update
 sudo apt-get install -y pandoc weasyprint git
 ```
 
-`nbconvert` will try to download Chromium if it is not available.
+Notebook rendering uses static HTML plus `weasyprint`, so Chromium is not required.
 
 ## Installation
 
@@ -129,7 +128,6 @@ The packaged daemon is wrapped with the runtime tools it needs at execution time
 - `git`
 - `pandoc`
 - `weasyprint`
-- `chromium` via `CHROMIUM_PATH`
 
 ### Home Manager example
 
@@ -269,7 +267,7 @@ repos:
 daemon:
   log_level: "INFO"
   random_delay_max_hours: 1
-  render_concurrency: 4
+  render_concurrency: 1
   render_timeout_seconds: 600
   upload_concurrency: 4
 
@@ -352,6 +350,7 @@ journalctl -u anthropic-daemon -n 200
 
 - If startup fails with `CONFIG ERROR`, fix the reported field and rerun `--check`.
 - If PDF output fails, verify `pandoc`, `weasyprint`, and notebook rendering dependencies.
+- Keep `daemon.render_concurrency: 1` on low-memory hosts; each render can be memory-intensive.
 - If emails are skipped, verify `Mail.Send` consent in Azure and that `email.sender` / `email.recipients` are valid.
 - If device code auth is expected, keep `user.password` empty.
 - Local output and cloned repo directories are deleted after the run; if a repo disappears unexpectedly, it will be re-cloned next run.

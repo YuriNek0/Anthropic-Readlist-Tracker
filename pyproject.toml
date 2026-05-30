@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Daemon that automatically fetches, updates, and renders Anthropic readings to PDF"
 requires-python = ">=3.13"
 dependencies = [
-    "nbconvert[webpdf]>=7.17.1",
+    "nbconvert>=7.17.1",
     "python-slugify>=8.0.4",
     "pyyaml>=6.0.3",
     "schedule>=1.2.0",

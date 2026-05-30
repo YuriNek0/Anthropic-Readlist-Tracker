@@ -53,7 +53,7 @@ repos:
 daemon:
   log_level: "INFO"
   random_delay_max_hours: 1
-  render_concurrency: 4
+  render_concurrency: 1
   render_timeout_seconds: 600
   upload_concurrency: 4
 
