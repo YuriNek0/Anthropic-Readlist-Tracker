@@ -154,6 +154,7 @@ def render_document_to_pdf(
                 "nbconvert",
                 "--to=webpdf",
                 "--WebPDFExporter.allow_chromium_download=False",
+                "--WebPDFExporter.disable_sandbox=True",
                 f"--output={final_name}",
                 f"--output-dir={folder_dir}",
                 str(temp_source),
