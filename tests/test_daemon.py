@@ -484,6 +484,109 @@ class TestRenderDocumentToPdf(unittest.TestCase):
 
 
 class TestRunDaemonFlow(unittest.IsolatedAsyncioTestCase):
+    async def test_process_repo_preserves_previous_version_for_failed_render(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            repo_path = temp_path / "courses-repo"
+            repo_path.mkdir()
+            (repo_path / "lesson.md").write_text("updated", encoding="utf-8")
+
+            config = daemon.Config.from_defaults()
+            config.output_dir = str(temp_path / "outputs")
+            repo_config = daemon.RepoConfig(
+                name="courses",
+                url="https://example.local/courses.git",
+                local_path=str(repo_path),
+                version_file="courses-version.json",
+                discover_patterns=["*.md"],
+                manifest_file=None,
+            )
+
+            current_doc = daemon.TrackedDocument(
+                path="lesson.md", title="Lesson", date="2024-01-02"
+            )
+            previous_doc = daemon.TrackedDocument(
+                path="lesson.md",
+                title="Lesson",
+                date="2024-01-01",
+                content_hash="old-hash",
+            )
+
+            def render_failed(doc, *_args):
+                return daemon.RenderedDocument(
+                    doc=doc,
+                    repo_name="courses",
+                    error="render failed",
+                )
+
+            with (
+                patch("orchestrator.ensure_repo_available", return_value=True),
+                patch("orchestrator.discover_courses", return_value={current_doc.path: current_doc}),
+                patch(
+                    "orchestrator.download_version_from_onedrive",
+                    AsyncMock(return_value={previous_doc.path: previous_doc}),
+                ),
+                patch("orchestrator.render_document_to_pdf", side_effect=render_failed),
+            ):
+                rendered, updated_docs = await daemon.process_repo(
+                    repo_config,
+                    config,
+                    MagicMock(),
+                )
+
+            self.assertEqual(len(rendered), 1)
+            self.assertEqual(rendered[0].error, "render failed")
+            self.assertEqual(updated_docs["lesson.md"].date, "2024-01-01")
+            self.assertEqual(updated_docs["lesson.md"].content_hash, "old-hash")
+
+    async def test_process_repo_omits_new_failed_render_from_version(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            repo_path = temp_path / "courses-repo"
+            repo_path.mkdir()
+            (repo_path / "new-lesson.md").write_text("new", encoding="utf-8")
+
+            config = daemon.Config.from_defaults()
+            config.output_dir = str(temp_path / "outputs")
+            repo_config = daemon.RepoConfig(
+                name="courses",
+                url="https://example.local/courses.git",
+                local_path=str(repo_path),
+                version_file="courses-version.json",
+                discover_patterns=["*.md"],
+                manifest_file=None,
+            )
+
+            current_doc = daemon.TrackedDocument(
+                path="new-lesson.md", title="New Lesson", date="2024-01-02"
+            )
+
+            def render_failed(doc, *_args):
+                return daemon.RenderedDocument(
+                    doc=doc,
+                    repo_name="courses",
+                    error="render failed",
+                )
+
+            with (
+                patch("orchestrator.ensure_repo_available", return_value=True),
+                patch("orchestrator.discover_courses", return_value={current_doc.path: current_doc}),
+                patch(
+                    "orchestrator.download_version_from_onedrive",
+                    AsyncMock(return_value={}),
+                ),
+                patch("orchestrator.render_document_to_pdf", side_effect=render_failed),
+            ):
+                rendered, updated_docs = await daemon.process_repo(
+                    repo_config,
+                    config,
+                    MagicMock(),
+                )
+
+            self.assertEqual(len(rendered), 1)
+            self.assertEqual(rendered[0].error, "render failed")
+            self.assertNotIn("new-lesson.md", updated_docs)
+
     async def test_run_daemon_processes_all_repos(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
@@ -987,6 +1090,10 @@ class TestRunDaemonFlow(unittest.IsolatedAsyncioTestCase):
                     AsyncMock(side_effect=upload_with_error),
                 ) as mock_upload_pdf,
                 patch(
+                    "orchestrator.upload_version_to_onedrive",
+                    AsyncMock(return_value="version-id"),
+                ) as mock_upload_version,
+                patch(
                     "orchestrator.send_error_email",
                     AsyncMock(return_value=None),
                 ) as mock_send_error,
@@ -995,6 +1102,7 @@ class TestRunDaemonFlow(unittest.IsolatedAsyncioTestCase):
                     await daemon.run_daemon(config, logger)
 
             self.assertEqual(mock_upload_pdf.await_count, 1)
+            mock_upload_version.assert_not_called()
             self.assertEqual(mock_send_error.await_count, 1)
 
             error_message = mock_send_error.await_args.args[0]

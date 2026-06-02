@@ -160,6 +160,26 @@ async def _render_documents_concurrently(
     return await asyncio.gather(*tasks)
 
 
+def _build_version_docs_after_render(
+    current_docs: dict[str, TrackedDocument],
+    previous_docs: dict[str, TrackedDocument],
+    rendered_docs: list[RenderedDocument],
+) -> dict[str, TrackedDocument]:
+    failed_paths = {rendered.doc.path for rendered in rendered_docs if rendered.error}
+    if not failed_paths:
+        return current_docs
+
+    version_docs = current_docs.copy()
+    for path in failed_paths:
+        previous_doc = previous_docs.get(path)
+        if previous_doc is None:
+            version_docs.pop(path, None)
+        else:
+            version_docs[path] = previous_doc
+
+    return version_docs
+
+
 async def process_repo(
     repo_config,
     config: Config,
@@ -221,7 +241,12 @@ async def process_repo(
         on_rendered=on_rendered,
     )
 
-    return rendered, current_docs
+    version_docs = _build_version_docs_after_render(
+        current_docs,
+        previous_docs,
+        rendered,
+    )
+    return rendered, version_docs
 
 
 async def _rollback_uploaded_items(
