@@ -197,6 +197,48 @@ class TestChangeDetection(unittest.TestCase):
         self.assertEqual(len(changed), 1)
         self.assertEqual(changed[0].change_type, daemon.ChangeType.CHANGED)
 
+    def test_same_hash_with_different_date_is_unchanged(self):
+        current = {
+            "examples/same-content.ipynb": daemon.TrackedDocument(
+                path="examples/same-content.ipynb",
+                title="Same Content Notebook",
+                date="2024-01-20",
+                content_hash="abcdef123456",
+            )
+        }
+        previous = {
+            "examples/same-content.ipynb": daemon.TrackedDocument(
+                path="examples/same-content.ipynb",
+                title="Same Content Notebook",
+                date="2024-01-15",
+                content_hash="abcdef123456",
+            )
+        }
+
+        changed = daemon.detect_changes(current, previous, self.repo_path, MagicMock())
+        self.assertEqual(len(changed), 0)
+
+    def test_missing_previous_hash_falls_back_to_date_change(self):
+        current = {
+            "examples/legacy.ipynb": daemon.TrackedDocument(
+                path="examples/legacy.ipynb",
+                title="Legacy Notebook",
+                date="2024-01-20",
+                content_hash="abcdef123456",
+            )
+        }
+        previous = {
+            "examples/legacy.ipynb": daemon.TrackedDocument(
+                path="examples/legacy.ipynb",
+                title="Legacy Notebook",
+                date="2024-01-15",
+            )
+        }
+
+        changed = daemon.detect_changes(current, previous, self.repo_path, MagicMock())
+        self.assertEqual(len(changed), 1)
+        self.assertEqual(changed[0].change_type, daemon.ChangeType.CHANGED)
+
 
 class TestDocumentDiscovery(unittest.TestCase):
     def setUp(self):

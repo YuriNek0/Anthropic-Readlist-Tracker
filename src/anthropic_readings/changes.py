@@ -58,15 +58,18 @@ def detect_changes(
             changed.append(doc)
             continue
 
-        current_date = parse_date(doc.date)
-        previous_date = parse_date(previous_doc.date)
-
-        hash_changed = doc.content_hash is not None and (
-            previous_doc.content_hash != doc.content_hash
-        )
-        if current_date != previous_date or hash_changed:
+        if _document_changed(doc, previous_doc):
             doc.change_type = ChangeType.CHANGED
             logger.info(f"CHANGED document: {path} ({previous_doc.date} -> {doc.date})")
             changed.append(doc)
 
     return changed
+
+
+def _document_changed(doc: TrackedDocument, previous_doc: TrackedDocument) -> bool:
+    if doc.content_hash is not None and previous_doc.content_hash is not None:
+        return doc.content_hash != previous_doc.content_hash
+
+    current_date = parse_date(doc.date)
+    previous_date = parse_date(previous_doc.date)
+    return current_date != previous_date
